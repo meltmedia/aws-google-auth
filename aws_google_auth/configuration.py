@@ -33,6 +33,7 @@ class Configuration(object):
         self.u2f_disabled = False
         self.resolve_aliases = False
         self.username = None
+        self.disable_duration_check = False
 
     # For the "~/.aws/config" file, we use the format "[profile testing]"
     # for the 'testing' profile. The credential file will just be "[testing]"

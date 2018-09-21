@@ -32,6 +32,7 @@ def parse_args(args):
     parser.add_argument('--no-cache', dest="saml_cache", action='store_false', help='Do not cache the SAML Assertion.')
     parser.add_argument('--resolve-aliases', action='store_true', help='Resolve AWS account aliases.')
     parser.add_argument('--save-failure-html', action='store_true', help='Write HTML failure responses to file for troubleshooting.')
+    parser.add_argument('--disable-duration-check', action='store_true', help='Do not attempt to get the role duration from IAM.')
 
     role_group = parser.add_mutually_exclusive_group()
     role_group.add_argument('-a', '--ask-role', action='store_true', help='Set true to always pick the role')
@@ -146,6 +147,12 @@ def resolve_config(args):
     config.keyring = coalesce(
         args.keyring,
         config.keyring)
+
+    # Get Role Duration (Option priority = ARGS, ENV_VAR, DEFAULT)
+    config.disable_duration_check = bool(coalesce(
+        args.disable_duration_check,
+        os.getenv('AWS_DISABLE_DURATION_CHECK'),
+        config.disable_duration_check))
 
     return config
 

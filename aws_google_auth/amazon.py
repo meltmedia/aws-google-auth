@@ -44,7 +44,7 @@ class Amazon:
                 RoleArn=self.config.role_arn,
                 PrincipalArn=self.config.provider,
                 SAMLAssertion=self.base64_encoded_saml,
-                DurationSeconds=self.config.duration)
+                DurationSeconds=self.max_duration)
         return self.__token
 
     @property
@@ -62,6 +62,34 @@ class Amazon:
     @property
     def expiration(self):
         return self.token['Credentials']['Expiration']
+
+    @property
+    def max_duration(self):
+        max_duration = self.config.duration
+
+        if self.config.disable_duration_check:
+            return max_duration
+
+        try:
+            saml = self.sts_client.assume_role_with_saml(
+                RoleArn=self.config.role_arn,
+                PrincipalArn=self.config.provider,
+                SAMLAssertion=self.base64_encoded_saml)
+
+            iam = boto3.client(
+                'iam', region_name=self.config.region,
+                aws_access_key_id=saml['Credentials']['AccessKeyId'],
+                aws_secret_access_key=saml['Credentials']['SecretAccessKey'],
+                aws_session_token=saml['Credentials']['SessionToken'])
+
+            role_name = self.config.role_arn.split(':', 5)[5].split('/')[1]
+            response = iam.get_role(RoleName=role_name)
+            max_duration = response['Role']['MaxSessionDuration']
+        except:
+            print("Failed to get the Duration for the selected role"
+                  "{}. Using the default of {}".format(self.config.role_arn, max_duration))
+
+        return max_duration
 
     def print_export_line(self):
         export_template = "export AWS_ACCESS_KEY_ID='{}' AWS_SECRET_ACCESS_KEY='{}' AWS_SESSION_TOKEN='{}' AWS_SESSION_EXPIRATION='{}'"

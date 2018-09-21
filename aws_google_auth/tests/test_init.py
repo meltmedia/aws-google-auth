@@ -56,7 +56,8 @@ class TestInit(unittest.TestCase):
                                          save_failure_html=False,
                                          saml_cache=True,
                                          sp_id=None,
-                                         username=None))
+                                         username=None,
+                                         disable_duration_check=False))
                           ],
                          resolve_config.mock_calls)
 
@@ -72,7 +73,8 @@ class TestInit(unittest.TestCase):
                                          save_failure_html=False,
                                          saml_cache=True,
                                          sp_id=None,
-                                         username=None),
+                                         username=None,
+                                         disable_duration_check=False),
                                mock_config)
                           ],
                          process_auth.mock_calls)
