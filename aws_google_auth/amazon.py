@@ -7,7 +7,7 @@ import boto3
 from datetime import datetime
 from threading import Thread
 
-from botocore.exceptions import ProfileNotFound
+from botocore.exceptions import ProfileNotFound, ClientError
 from lxml import etree
 
 from aws_google_auth.google import ExpectedGoogleException
@@ -117,9 +117,15 @@ class Amazon:
             session = boto3.session.Session(region_name=self.config.region)
 
             sts = session.client('sts')
-            saml = sts.assume_role_with_saml(RoleArn=role,
-                                             PrincipalArn=principal,
-                                             SAMLAssertion=self.base64_encoded_saml)
+            saml = None
+
+            try:
+                saml = sts.assume_role_with_saml(RoleArn=role,
+                                                PrincipalArn=principal,
+                                                SAMLAssertion=self.base64_encoded_saml)
+            except ClientError as e:
+                print("Failed to get alias {} for {}.".format(e.response['Error']['Code'], role))
+                return
 
             iam = session.client('iam',
                                  aws_access_key_id=saml['Credentials']['AccessKeyId'],
