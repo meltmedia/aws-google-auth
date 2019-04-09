@@ -44,7 +44,7 @@ class Util:
 
                 try:
                     return list(ordered_roles.items())[int(choice) - 1]
-                except IndexError:
+                except (IndexError, ValueError):
                     print("Invalid choice, try again.")
         else:
             while True:
@@ -56,7 +56,7 @@ class Util:
 
                 try:
                     return list(roles.items())[int(choice) - 1]
-                except IndexError:
+                except (IndexError, ValueError):
                     print("Invalid choice, try again.")
 
     @staticmethod
@@ -91,6 +91,7 @@ class Util:
             password = getpass.getpass(prompt)
         else:
             print(prompt, end="")
+            sys.stdout.flush()
             password = sys.stdin.readline()
             print("")
         return password

@@ -5,10 +5,13 @@ from __future__ import print_function
 import base64
 import io
 import json
+import logging
+import os
 import sys
 
 import requests
 from PIL import Image
+from distutils.spawn import find_executable
 from bs4 import BeautifulSoup
 from requests import HTTPError
 from six import print_ as print
@@ -20,8 +23,8 @@ from aws_google_auth import _version
 try:
     from aws_google_auth import u2f
 except ImportError:
-    print("Failed to import U2F libraries, U2F login unavailable. Other "
-          "methods can still continue.")
+    logging.info("Failed to import U2F libraries, U2F login unavailable. "
+                 "Other methods can still continue.")
 
 
 class ExpectedGoogleException(Exception):
@@ -47,6 +50,7 @@ class Google:
         self.config = config
         self.base_url = 'https://accounts.google.com'
         self.save_failure = save_failure
+        self.session_state = None
 
     @property
     def login_url(self):
@@ -76,7 +80,7 @@ class Google:
         except HTTPError as ex:
 
             if self.save_failure:
-                print("Saving failure trace in 'failure.html'")
+                logging.exception("Saving failure trace in 'failure.html'", ex)
                 with open("failure.html", 'w') as out:
                     out.write(sess.text)
 
@@ -88,16 +92,15 @@ class Google:
         try:
             response = self.check_for_failure(self.session.post(url, data=data, json=json))
         except requests.exceptions.ConnectionError as e:
-            print(
-                'There was a connection error, check your network settings: {}'.
-                format(e))
+            logging.exception(
+                'There was a connection error, check your network settings.', e)
             sys.exit(1)
         except requests.exceptions.Timeout as e:
-            print('The connection timed out, please try again: {}'.format(e))
+            logging.exception('The connection timed out, please try again.', e)
             sys.exit(1)
         except requests.exceptions.TooManyRedirects as e:
-            print('The number of redirects exceeded the maximum allowed: {}'.
-                  format(e))
+            logging.exception('The number of redirects exceeded the maximum '
+                              'allowed.', e)
             sys.exit(1)
 
         return response
@@ -106,16 +109,15 @@ class Google:
         try:
             response = self.check_for_failure(self.session.get(url))
         except requests.exceptions.ConnectionError as e:
-            print(
-                'There was a connection error, check your network settings: {}'.
-                format(e))
+            logging.exception(
+                'There was a connection error, check your network settings.', e)
             sys.exit(1)
         except requests.exceptions.Timeout as e:
-            print('The connection timed out, please try again: {}'.format(e))
+            logging.exception('The connection timed out, please try again.', e)
             sys.exit(1)
         except requests.exceptions.TooManyRedirects as e:
-            print('The number of redirects exceeded the maximum allowed: {}'.
-                  format(e))
+            logging.exception('The number of redirects exceeded the maximum '
+                              'allowed.', e)
             sys.exit(1)
 
         return response
@@ -248,7 +250,7 @@ class Google:
                 sess = self.handle_totp(sess)
                 error_msg = self.parse_error_message(sess)
                 if error_msg is not None:
-                    print(error_msg)
+                    logging.error(error_msg)
         elif "challenge/ipp/" in sess.url:
             sess = self.handle_sms(sess)
         elif "challenge/az/" in sess.url:
@@ -283,9 +285,10 @@ class Google:
         except:
 
             if self.save_failure:
-                print("SAML lookup failed, storing failure page to 'saml.html' to assist with debugging.")
+                logging.error("SAML lookup failed, storing failure page to "
+                              "'saml.html' to assist with debugging.")
                 with open("saml.html", 'w') as out:
-                    out.write(self.session_state.text.encode('utf-8'))
+                    out.write(str(self.session_state.text.encode('utf-8')))
 
             raise ExpectedGoogleException('Something went wrong - Could not find SAML response, check your credentials or use --save-failure-html to debug.')
 
@@ -319,14 +322,23 @@ class Google:
         captcha_logintoken_audio = captcha_container.find('input', {'name': 'logintoken_audio'}).get('value')
         captcha_url_audio = captcha_container.find('input', {'name': 'url_audio'}).get('value')
 
-        # Try to open the image for the user automatically, but if that fails for
-        # any reason, just display the URL for the user to visit.
-        try:
-            with requests.get(captcha_url) as url:
-                with io.BytesIO(url.content) as f:
-                    Image.open(f).show()
-        except Exception:
-            print("Please visit the following URL to view your CAPTCHA: {}".format(captcha_url))
+        open_image = True
+
+        # Check if there is a display utility installed as Image.open(f).show() do not raise any exception if not
+        # if neither xv or display are available just display the URL for the user to visit.
+        if os.name == 'posix' and sys.platform != 'darwin':
+            if find_executable('xv') is None and find_executable('display') is None:
+                open_image = False
+
+        print("Please visit the following URL to view your CAPTCHA: {}".format(captcha_url))
+
+        if open_image:
+            try:
+                with requests.get(captcha_url) as url:
+                    with io.BytesIO(url.content) as f:
+                        Image.open(f).show()
+            except Exception:
+                pass
 
         try:
             captcha_input = raw_input("Captcha (case insensitive): ") or None
@@ -367,8 +379,8 @@ class Google:
                 auth_response = json.dumps(u2f.u2f_auth(u2f_challenges, facet))
                 break
             except RuntimeWarning:
-                print("No U2F device found. {} attempts remaining.".format(
-                    attempts_remaining))
+                logging.error("No U2F device found. %d attempts remaining",
+                              attempts_remaining)
                 if attempts_remaining <= 0:
                     break
                 else:
@@ -621,7 +633,7 @@ class Google:
                 if choice not in [1, 2]:
                     raise ValueError
             except ValueError:
-                print("Not a valid (integer) option, try again")
+                logging.error("Not a valid (integer) option, try again")
                 continue
             else:
                 if choice == 1:
